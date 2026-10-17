@@ -42,6 +42,7 @@ dotnet run
 | 文件 | 内容 |
 |---|---|
 | opencom.json | 串口参数、显示选项、发送列表（退出自动保存） |
+| configs/\<名称\>.json | 命名配置（文件菜单保存配置/配置管理） |
 | opencom.log | 运行日志 |
 | opencom.txt | 接收窗口数据（与显示逐字一致） |
 

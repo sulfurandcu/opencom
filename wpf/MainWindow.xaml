@@ -13,15 +13,18 @@
                 <Separator/>
                 <MenuItem Header="保存文本..." Command="{Binding SaveReceiveCommand}"/>
                 <Separator/>
+                <MenuItem Header="保存配置..." Command="{Binding SaveConfigCommand}"/>
+                <MenuItem Header="加载配置..." Command="{Binding OpenConfigManagerCommand}"/>
+                <Separator/>
                 <MenuItem Header="退出" Click="MenuExit_Click"/>
             </MenuItem>
             <MenuItem Header="视图(_V)">
-                <!-- 固定文字 ASCII（与底部按钮一致），勾选态 = ASCII 模式 -->
-                <MenuItem Header="显示格式: ASCII" IsCheckable="True" IsChecked="{Binding Display.Hex, Converter={StaticResource InverseBool}}"/>
                 <MenuItem Header="显示时间戳" IsCheckable="True" IsChecked="{Binding Display.Timestamp}"/>
                 <MenuItem Header="显示方向" IsCheckable="True" IsChecked="{Binding Display.Direction}"/>
                 <MenuItem Header="显示发送数据" IsCheckable="True" IsChecked="{Binding Display.ShowTx}"/>
                 <Separator/>
+                <!-- 固定文字 ASCII模式（与底部按钮一致），勾选态 = ASCII 模式 -->
+                <MenuItem Header="ASCII 模式" IsCheckable="True" IsChecked="{Binding Display.Hex, Converter={StaticResource InverseBool}}"/>
                 <MenuItem Header="Shell 模式" IsCheckable="True" IsChecked="{Binding ShellMode}"/>
                 <MenuItem Header="Shell 回车符">
                     <MenuItem x:Name="miEolCrlf" Header="CRLF (\r\n)" Click="Eol_Click" Tag="0"/>

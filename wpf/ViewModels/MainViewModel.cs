@@ -73,6 +73,7 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private int _loopAllCycles;          // 循环全部：轮数（0=无限）
     [ObservableProperty] private int _loopAllRowInterval = 100;   // 循环全部：行间间隔 ms
     [ObservableProperty] private int _loopAllCycleInterval = 1000;// 循环全部：轮间间隔 ms
+    [ObservableProperty] private string _configName = "";     // 保存配置对话框：配置名称
 
     public MainViewModel()
     {
@@ -986,6 +987,88 @@ private static int Utf8SeqLen(byte b) => b switch
     public void SetShellEol(int eol)
     {
         Display.ShellEol = eol;
+    }
+
+    // ---------------- 命名配置（文件菜单） ----------------
+
+    /// <summary>加载命名配置后触发（视图用于同步串口参数下拉框）。</summary>
+    public event Action? ConfigLoaded;
+
+    /// <summary>配置管理对话框：加载 / 重命名 / 删除命名配置。</summary>
+    [RelayCommand]
+    private void OpenConfigManager()
+    {
+        var dlg = new ConfigManagerDialog(_config, this)
+        {
+            Owner = Application.Current.MainWindow,
+        };
+        dlg.ShowDialog();
+    }
+
+    [RelayCommand]
+    private void SaveConfig()
+    {
+        var dlg = new SaveConfigDialog
+        {
+            Owner = Application.Current.MainWindow,
+            DataContext = this,
+        };
+        if (dlg.ShowDialog() != true) return;
+        var name = ConfigName.Trim();
+        if (_config.ListConfigs().Contains(name))
+        {
+            var r = MessageBox.Show($"配置“{name}”已存在，覆盖？", "保存配置",
+                                    MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (r != MessageBoxResult.Yes) return;
+        }
+        _config.SaveNamed(name, Serial, Display, Trigger, Rows.ToList());
+        LogService.Log($"保存配置：{name}（{Rows.Count} 行）");
+    }
+
+    /// <summary>已保存的命名配置列表（加载配置子菜单用）。</summary>
+    public string[] ListSavedConfigs() => _config.ListConfigs();
+
+    /// <summary>加载命名配置：串口开着时拒绝（参数只在下次打开生效，避免半套状态）。</summary>
+    public void LoadConfigByName(string name)
+    {
+        if (_serial.IsOpen)
+        {
+            MessageBox.Show("请先关闭串口再加载配置", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var cfg = _config.LoadNamed(name);
+        if (cfg == null)
+        {
+            MessageBox.Show("配置加载失败", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+        ApplyConfig(cfg.Value.serial, cfg.Value.display, cfg.Value.trigger, cfg.Value.rows);
+        ConfigLoaded?.Invoke();   // 视图同步串口参数下拉框
+        LogService.Log($"加载配置：{name}（{Rows.Count} 行）");
+    }
+
+    /// <summary>原地应用配置（保持绑定不断）：串口/显示/触发参数拷贝 + 行列表替换。</summary>
+    private void ApplyConfig(SerialSettings s, DisplayOptions d, TriggerOptions t, List<SendRow> rows)
+    {
+        Serial.Port = s.Port;
+        Serial.Baud = s.Baud;
+        Serial.DataBits = s.DataBits;
+        Serial.Parity = s.Parity;
+        Serial.StopBits = s.StopBits;
+        Serial.FlowControl = s.FlowControl;
+        Serial.Dtr = s.Dtr;
+        Serial.Rts = s.Rts;
+        Display.Hex = d.Hex;
+        Display.Timestamp = d.Timestamp;
+        Display.Direction = d.Direction;
+        Display.ShowTx = d.ShowTx;
+        Display.ShellEol = d.ShellEol;
+        Trigger.Enabled = t.Enabled;
+        Trigger.DelayMs = t.DelayMs;
+        Rows.Clear();
+        foreach (var r in rows.Take(MaxRows)) Rows.Add(r);
+        RebuildTriggers();
+        RefreshPorts();
     }
 
     // ---------------- 收尾 ----------------

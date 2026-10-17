@@ -21,6 +21,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = _vm;
         _vm.PropertyChanged += OnVmPropertyChanged;
+        _vm.ConfigLoaded += SyncSerialCombos;   // 加载命名配置后同步串口下拉框
         SyncSerialCombos();
         UpdateRecvReadOnly();
         // 接收窗口禁用输入法：Shell 模式敲一个字符必须发一个字符，
