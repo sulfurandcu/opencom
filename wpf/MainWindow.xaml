@@ -1,0 +1,275 @@
+﻿<Window x:Class="OpenCom.Wpf.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="串口调试助手 v0.0.0 sulfurandcu@gmail.com" Height="720" Width="1280"
+        Icon="opencom.png"
+        WindowStartupLocation="CenterScreen">
+    <DockPanel>
+        <!-- 菜单 -->
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="文件(_F)">
+                <MenuItem Header="打开串口" Command="{Binding TogglePortCommand}"/>
+                <MenuItem Header="关闭串口" Command="{Binding TogglePortCommand}"/>
+                <Separator/>
+                <MenuItem Header="保存文本..." Command="{Binding SaveReceiveCommand}"/>
+                <Separator/>
+                <MenuItem Header="退出" Click="MenuExit_Click"/>
+            </MenuItem>
+            <MenuItem Header="视图(_V)">
+                <!-- 固定文字 ASCII（与底部按钮一致），勾选态 = ASCII 模式 -->
+                <MenuItem Header="显示格式: ASCII" IsCheckable="True" IsChecked="{Binding Display.Hex, Converter={StaticResource InverseBool}}"/>
+                <MenuItem Header="显示时间戳" IsCheckable="True" IsChecked="{Binding Display.Timestamp}"/>
+                <MenuItem Header="显示方向" IsCheckable="True" IsChecked="{Binding Display.Direction}"/>
+                <MenuItem Header="显示发送数据" IsCheckable="True" IsChecked="{Binding Display.ShowTx}"/>
+                <Separator/>
+                <MenuItem Header="Shell 模式" IsCheckable="True" IsChecked="{Binding ShellMode}"/>
+                <MenuItem Header="Shell 回车符">
+                    <MenuItem x:Name="miEolCrlf" Header="CRLF (\r\n)" Click="Eol_Click" Tag="0"/>
+                    <MenuItem x:Name="miEolCr" Header="CR (\r)" Click="Eol_Click" Tag="1"/>
+                    <MenuItem x:Name="miEolLf" Header="LF (\n)" Click="Eol_Click" Tag="2"/>
+                </MenuItem>
+            </MenuItem>
+            <MenuItem Header="帮助(_H)">
+                <MenuItem Header="关于" Click="About_Click"/>
+            </MenuItem>
+        </Menu>
+
+        <!-- 状态栏 -->
+        <StatusBar DockPanel.Dock="Bottom">
+            <StatusBarItem Content="{Binding StatusText}" Width="400"/>
+            <Separator/>
+            <StatusBarItem Content="{Binding CountersText}"/>
+        </StatusBar>
+
+        <!-- 串口参数条 -->
+        <Border DockPanel.Dock="Top" Padding="12,3" Background="{StaticResource Brush.Client}">
+            <StackPanel Orientation="Horizontal">
+                <!-- 播放/停止 图标按钮（绿色三角 / 红色方块） -->
+                <Button Command="{Binding TogglePortCommand}" Width="34" Height="24"
+                        ToolTip="{Binding PortButtonText}"
+                        Background="#F0F0F4" BorderBrush="#C6C6CE" BorderThickness="1" Padding="0">
+                    <Grid>
+                        <Path Data="M 1,2 L 1,14 L 13,8 Z" Fill="#22963E" Stretch="None">
+                            <Path.Style>
+                                <Style TargetType="Path">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding PortOpen}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Path.Style>
+                        </Path>
+                        <Path Data="M 3,3 L 13,3 L 13,13 L 3,13 Z" Fill="#C63434" Stretch="None">
+                            <Path.Style>
+                                <Style TargetType="Path">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding PortOpen}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Path.Style>
+                        </Path>
+                    </Grid>
+                </Button>
+                <!-- 暂停 图标按钮（双竖条；暂停中底色加深、竖条更深） -->
+                <Button Command="{Binding TogglePauseCommand}" Width="34" Height="24"
+                        ToolTip="{Binding PauseButtonText}"
+                        BorderBrush="#C6C6CE" BorderThickness="1" Padding="0">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Background" Value="#F0F0F4"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding RecvPaused}" Value="True">
+                                    <Setter Property="Background" Value="#C6D6F0"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                    <Path Data="M 4,2 L 7,2 L 7,14 L 4,14 Z M 9,2 L 12,2 L 12,14 L 9,14 Z" Stretch="None">
+                        <Path.Style>
+                            <Style TargetType="Path">
+                                <Setter Property="Fill" Value="#5A5E68"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding RecvPaused}" Value="True">
+                                        <Setter Property="Fill" Value="#282C36"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Path.Style>
+                    </Path>
+                </Button>
+                <Separator Width="8"/>
+                <ComboBox Width="100" Height="24" ItemsSource="{Binding Ports}"
+                          SelectedItem="{Binding Serial.Port}"
+                          DropDownOpened="Ports_DropDownOpened"
+                          IsEnabled="{Binding PortOpen, Converter={StaticResource InverseBool}}"/>
+                <Separator Width="6"/>
+                <ComboBox Width="88" Height="24" IsEditable="True" ItemsSource="{Binding BaudRates}"
+                          Text="{Binding Serial.Baud, Mode=TwoWay}"
+                          IsEnabled="{Binding PortOpen, Converter={StaticResource InverseBool}}"/>
+                <Separator Width="6"/>
+                <ComboBox x:Name="cbData" Width="52" Height="24" SelectionChanged="DataBits_Changed"
+                          IsEnabled="{Binding PortOpen, Converter={StaticResource InverseBool}}">
+                    <ComboBoxItem Content="5" Tag="5"/>
+                    <ComboBoxItem Content="6" Tag="6"/>
+                    <ComboBoxItem Content="7" Tag="7"/>
+                    <ComboBoxItem Content="8" Tag="8" IsSelected="True"/>
+                </ComboBox>
+                <Separator Width="6"/>
+                <ComboBox x:Name="cbParity" Width="76" Height="24" SelectionChanged="Parity_Changed"
+                          IsEnabled="{Binding PortOpen, Converter={StaticResource InverseBool}}">
+                    <ComboBoxItem Content="NONE" Tag="None"/>
+                    <ComboBoxItem Content="ODD" Tag="Odd"/>
+                    <ComboBoxItem Content="EVEN" Tag="Even"/>
+                    <ComboBoxItem Content="MARK" Tag="Mark"/>
+                    <ComboBoxItem Content="SPACE" Tag="Space"/>
+                </ComboBox>
+                <Separator Width="6"/>
+                <ComboBox x:Name="cbStop" Width="60" Height="24" SelectionChanged="StopBits_Changed"
+                          IsEnabled="{Binding PortOpen, Converter={StaticResource InverseBool}}">
+                    <ComboBoxItem Content="1位" Tag="One"/>
+                    <ComboBoxItem Content="1.5位" Tag="OnePointFive"/>
+                    <ComboBoxItem Content="2位" Tag="Two"/>
+                </ComboBox>
+                <Separator Width="6"/>
+                <ComboBox x:Name="cbFlow" Width="88" Height="24" SelectionChanged="Flow_Changed"
+                          IsEnabled="{Binding PortOpen, Converter={StaticResource InverseBool}}">
+                    <ComboBoxItem Content="无流控" Tag="None"/>
+                    <ComboBoxItem Content="RTS/CTS" Tag="RequestToSend"/>
+                    <ComboBoxItem Content="XON/XOFF" Tag="XOnXOff"/>
+                </ComboBox>
+                <Separator Width="6"/>
+                <CheckBox Content="DTR" VerticalAlignment="Center" IsChecked="{Binding Serial.Dtr}"
+                          IsEnabled="{Binding PortOpen, Converter={StaticResource InverseBool}}"/>
+                <CheckBox Content="RTS" VerticalAlignment="Center" IsChecked="{Binding Serial.Rts}"
+                          IsEnabled="{Binding PortOpen, Converter={StaticResource InverseBool}}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 主区域：左发送 / 右接收 -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="440" MinWidth="380"/>
+                <ColumnDefinition Width="*" MinWidth="320"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 左面板 -->
+            <DockPanel Grid.Column="0" Margin="12,4,6,8">
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
+                    <TextBlock Text="发送窗口" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <Button Content="添加" Command="{Binding AddRowCommand}" Width="46"/>
+                    <Button Content="插入" Command="{Binding InsertRowCommand}" Width="46"/>
+                    <Button Content="删除" Command="{Binding DeleteRowCommand}" Width="46"/>
+                    <Button Content="上移" Command="{Binding MoveUpCommand}" Width="46"/>
+                    <Button Content="下移" Command="{Binding MoveDownCommand}" Width="46"/>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,6,0,0">
+                    <Button Content="发送选中" Command="{Binding SendSelectedCommand}" Width="66"/>
+                    <Button Content="{Binding LoopButtonText}" Command="{Binding ToggleLoopCommand}" Width="66" Margin="4,0,0,0"/>
+                    <Button Content="{Binding LoopAllButtonText}" Command="{Binding ToggleLoopAllCommand}" Width="66" Margin="4,0,0,0"/>
+                </StackPanel>
+
+                <DataGrid ItemsSource="{Binding Rows}" SelectedItem="{Binding SelectedRow}"
+                          PreviewMouseDoubleClick="SendGrid_MouseDoubleClick"
+                          PreviewMouseRightButtonDown="SendGrid_PreviewMouseRightButtonDown">
+                    <DataGrid.Resources>
+                        <Style TargetType="DataGridColumnHeader">
+                            <EventSetter Event="MouseDoubleClick" Handler="Header_MouseDoubleClick"/>
+                            <!-- 表头默认居中，只有"内容"列保持左对齐 -->
+                            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Content, RelativeSource={RelativeSource Self}}" Value="内容">
+                                    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                        <!-- 选中行高亮换成 240 灰底（字体颜色保持组色，见 CellStyle）：
+                             覆盖 DataGrid 模板里的系统高亮画刷（模板触发器优先级高于
+                             普通样式，直接设 DataGridRow.Background 会被系统高亮盖住） -->
+                        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#F0F0F0"/>
+                        <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#F0F0F0"/>
+                        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="Black"/>
+                        <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="Black"/>
+                    </DataGrid.Resources>
+                    <DataGrid.CellStyle>
+                        <Style TargetType="DataGridCell">
+                            <Setter Property="Foreground" Value="{Binding GroupColor}"/>
+                            <Setter Property="BorderThickness" Value="0"/>
+                            <Setter Property="Padding" Value="2,0"/>
+                            <Style.Triggers>
+                                <!-- 选中只改背景（240 灰，见上面系统画刷覆盖），字体颜色
+                                     保持组色（样式触发器优先级高于模板触发器，能压住
+                                     主题里 IsSelected → HighlightTextBrush 的覆盖） -->
+                                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
+                                    <Setter Property="Foreground" Value="{Binding GroupColor}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGrid.CellStyle>
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="内容" Width="3*" MinWidth="120">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <!-- 常驻编辑：绑定 PropertyChanged，点进格子里即可输入 -->
+                                    <TextBox Text="{Binding Content, UpdateSourceTrigger=PropertyChanged}"
+                                             BorderThickness="0" Background="Transparent"
+                                             VerticalContentAlignment="Center" Padding="2,0"
+                                             MouseDoubleClick="ContentBox_MouseDoubleClick"
+                                             LostKeyboardFocus="ContentBox_LostFocus"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="格式" Width="56" IsReadOnly="True" CanUserSort="False"
+                                            Binding="{Binding FormatLabel}" ElementStyle="{StaticResource CenteredCell}"/>
+                        <DataGridTextColumn Header="关系" Width="56" IsReadOnly="True" CanUserSort="False"
+                                            Binding="{Binding RoleLabel}" ElementStyle="{StaticResource CenteredCell}"/>
+                        <DataGridTemplateColumn Header="次数" Width="44" MinWidth="36" CanUserSort="False">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <!-- 循环发送全部时本行的发送次数（0=跳过），失焦校验非负整数 -->
+                                    <TextBox Text="{Binding SendCount, UpdateSourceTrigger=PropertyChanged}"
+                                             BorderThickness="0" Background="Transparent"
+                                             TextAlignment="Center" HorizontalContentAlignment="Center"
+                                             VerticalContentAlignment="Center" Padding="2,0"
+                                             LostKeyboardFocus="CountBox_LostFocus"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+
+            <!-- 右面板 -->
+            <DockPanel Grid.Column="1" Margin="6,4,12,8">
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
+                    <TextBlock Text="接收窗口" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <Button Content="清空" Command="{Binding ClearReceiveCommand}" Width="60"/>
+                    <Button Content="复制" Command="{Binding CopyReceiveCommand}" Width="60"/>
+                    <Button Content="保存" Command="{Binding SaveReceiveCommand}" Width="60"/>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,6,0,0">
+                    <!-- 高度/字体与发送面板按钮一致（ToggleButton 同款内边距，见 App.xaml）；宽度按文字长短 -->
+                    <ToggleButton Content="Shell" IsChecked="{Binding ShellMode}" Width="56"/>
+                    <ToggleButton Content="ASCII" Width="56" IsChecked="{Binding Display.Hex, Converter={StaticResource InverseBool}}" ToolTip="显示格式：选中=ASCII，未选中=HEX"/>
+                    <ToggleButton Content="时间" IsChecked="{Binding Display.Timestamp}" Width="48"/>
+                    <ToggleButton Content="方向" IsChecked="{Binding Display.Direction}" Width="48"/>
+                    <ToggleButton Content="发送数据" IsChecked="{Binding Display.ShowTx}" Width="66"/>
+                </StackPanel>
+
+                <TextBox x:Name="RecvBox"
+                         Text="{Binding ReceiveText, Mode=OneWay}"
+                         FontFamily="Consolas" FontSize="11"
+                         IsReadOnly="True" IsUndoEnabled="False"
+                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                         AcceptsReturn="True" TextWrapping="NoWrap"
+                         PreviewTextInput="RecvBox_PreviewTextInput"
+                         PreviewKeyDown="RecvBox_PreviewKeyDown"
+                         TextChanged="RecvBox_TextChanged"/>
+            </DockPanel>
+        </Grid>
+    </DockPanel>
+</Window>

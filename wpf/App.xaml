@@ -1,0 +1,68 @@
+﻿<Application x:Class="OpenCom.Wpf.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <conv:InverseBoolConverter x:Key="InverseBool"
+            xmlns:conv="clr-namespace:OpenCom.Wpf.Converters"/>
+        <!-- 浅色主题（客户区 #F5F5F7、正文 #303032） -->
+        <SolidColorBrush x:Key="Brush.Client" Color="#F5F5F7"/>
+        <SolidColorBrush x:Key="Brush.Text" Color="#303032"/>
+        <SolidColorBrush x:Key="Brush.SelRow" Color="#F0F0F0"/>
+        <SolidColorBrush x:Key="Brush.Border" Color="#D0D0D5"/>
+
+        <Style TargetType="Window">
+            <Setter Property="FontFamily" Value="Microsoft YaHei UI"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Background" Value="{StaticResource Brush.Client}"/>
+        </Style>
+
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="Margin" Value="0"/>
+        </Style>
+
+        <!-- 与 Button 同内边距：两者高度一致（接收窗口底部开关按钮） -->
+        <Style TargetType="ToggleButton">
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="Margin" Value="0"/>
+        </Style>
+
+        <Style TargetType="DataGrid">
+            <Setter Property="GridLinesVisibility" Value="All"/>
+            <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource Brush.Border}"/>
+            <Setter Property="VerticalGridLinesBrush" Value="{StaticResource Brush.Border}"/>
+            <Setter Property="HeadersVisibility" Value="Column"/>
+            <Setter Property="CanUserAddRows" Value="False"/>
+            <Setter Property="CanUserResizeRows" Value="False"/>
+            <Setter Property="SelectionMode" Value="Single"/>
+            <Setter Property="SelectionUnit" Value="FullRow"/>
+            <Setter Property="AutoGenerateColumns" Value="False"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Brush.Border}"/>
+            <Setter Property="RowHeaderWidth" Value="0"/>
+            <!-- 非单元格区域（表格下方空白）也是白色 -->
+            <Setter Property="Background" Value="White"/>
+        </Style>
+
+        <!-- 单元格背景透明：让行的背景（含选中行 240 灰底）透出来 -->
+        <Style TargetType="DataGridCell">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+
+        <!-- 格式/关系列文字居中 -->
+        <Style x:Key="CenteredCell" TargetType="TextBlock">
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- 选中行：240 浅灰底 + 黑字（不盖组颜色） -->
+        <Style TargetType="DataGridRow">
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{StaticResource Brush.SelRow}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Application.Resources>
+</Application>

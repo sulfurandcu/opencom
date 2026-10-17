@@ -1,0 +1,28 @@
+# .NET 构建产物
+bin/
+obj/
+*.user
+
+# 编译产物
+*.exe
+*.dll
+*.pdb
+*.o
+
+# Python
+__pycache__/
+*.pyc
+@AutomationLog.txt
+
+# 测试目录不提交
+test/
+
+# 测试产生的临时/备份文件
+*.bak
+*.bak_*
+*.bak.*
+debug.log.bak
+
+# 系统
+Thumbs.db
+.DS_Store
