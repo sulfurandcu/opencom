@@ -71,7 +71,14 @@ public sealed class TriggerEngine
     public static bool TryCompileContent(SendRow row)
     {
         var bytes = CompileTx(row, out var ok);
-        if (ok) row.TxBytes = bytes;
+        if (ok)
+        {
+            row.TxBytes = bytes;
+            /* 匹配行的模式也要同步刷新：否则内容编辑后引擎还在用旧模式
+             * 匹配（"匹配行内容修改后不触发、重启才生效"的根因）。 */
+            if (row.Role == RowRole.Match)
+                row.Pattern = ParsePattern(row);
+        }
         return ok;
     }
 

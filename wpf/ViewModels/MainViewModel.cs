@@ -47,6 +47,7 @@ public partial class MainViewModel : ObservableObject
 
     public SerialSettings Serial { get; } = new();
     public DisplayOptions Display { get; } = new();
+    public TriggerOptions Trigger { get; } = new();
 
     public ObservableCollection<SendRow> Rows { get; } = new();
     public ObservableCollection<string> Ports { get; } = new();
@@ -75,9 +76,10 @@ public partial class MainViewModel : ObservableObject
 
     public MainViewModel()
     {
-        var (serial, display, rows) = _config.Load();
+        var (serial, display, trigger, rows) = _config.Load();
         Serial = serial;
         Display = display;
+        Trigger = trigger;
         foreach (var r in rows.Take(MaxRows)) Rows.Add(r);
 
         _serial.DataReceived += OnDataReceived;
@@ -145,6 +147,12 @@ public partial class MainViewModel : ObservableObject
                     return;
                 }
                 _serial.Open(Serial);
+                // 新会话：清空跨会话的接收状态（行缓冲/待显队列/CR·UTF-8 归一化状态），
+                // 防止上一次会话的半行与本次数据拼接
+                lock (_lineLock) _lineBuf.Clear();
+                _pendingRx.Clear();
+                _prevCr = false;
+                _utf8Tail.Clear();
                 PortOpen = true;
                 PortButtonText = "关闭串口";
                 UpdateStatusText();
@@ -215,12 +223,31 @@ public partial class MainViewModel : ObservableObject
         FeedLine(data);
     }
 
-    /// <summary>触发命中：发送目标行内容并排入 TX 显示。</summary>
+    /// <summary>触发命中：按全局延时发送目标行内容并排入 TX 显示。
+    /// 延时发送期间若触发被关闭，则取消本次发送。</summary>
     private void OnTriggerHit(SendRow target)
+    {
+        if (!Trigger.Enabled) return;
+        int delay = Trigger.DelayMs;
+        if (delay <= 0)
+        {
+            DoTriggerSend(target);
+            return;
+        }
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(delay);
+            if (Trigger.Enabled) DoTriggerSend(target);   // 延时期间被关闭 → 取消
+        });
+    }
+
+    private void DoTriggerSend(SendRow target)
     {
         if (!_serial.Write(target.TxBytes)) return;   // 发送失败已记日志
         _txTotal += target.TxBytes.Length;
-        LogService.Log($"触发命中：发送 {target.TxBytes.Length} 字节");
+        LogService.Log(Trigger.DelayMs > 0
+            ? $"触发命中：延时 {Trigger.DelayMs}ms 后发送 {target.TxBytes.Length} 字节"
+            : $"触发命中：发送 {target.TxBytes.Length} 字节");
         _ui.BeginInvoke(UpdateCounters);
         _ui.BeginInvoke(() => AppendReceive(target.TxBytes, isTx: true));
     }
@@ -257,12 +284,16 @@ public partial class MainViewModel : ObservableObject
         if (done == null) return;
         foreach (var line in done)
         {
-            _trigger.Feed(Rows, line, OnTriggerHit);
-            _trigger.ResetStates();   // 行边界：清掉跨行 carry
+            if (Trigger.Enabled)
+            {
+                _trigger.Feed(Rows, line, OnTriggerHit);
+                _trigger.ResetStates();   // 行边界：清掉跨行 carry
+            }
         }
     }
 
-    /// <summary>静默断行 = 一行收完：把缓冲行喂给触发引擎（由定时器调用）。</summary>
+    /// <summary>静默断行 = 一行收完：把缓冲行喂给触发引擎（由定时器调用）。
+    /// 触发关闭时只丢弃缓冲，不做匹配。</summary>
     private void FlushLineBuf()
     {
         byte[]? line = null;
@@ -275,6 +306,7 @@ public partial class MainViewModel : ObservableObject
             }
         }
         if (line == null) return;
+        if (!Trigger.Enabled) return;
         _trigger.Feed(Rows, line, OnTriggerHit);
         _trigger.ResetStates();
     }
@@ -530,14 +562,36 @@ public partial class MainViewModel : ObservableObject
         RebuildTriggers();
     }
 
+    /// <summary>行结构变动（插入/删除/移动）后重映射匹配行的 TargetIndex：
+    /// 目标行被删除或不再是触发行 → 连带取消该匹配行；目标行位移 → 跟着更新。</summary>
+    private void FixMatchTargets(List<SendRow> oldRows)
+    {
+        for (int i = 0; i < Rows.Count; i++)
+        {
+            var r = Rows[i];
+            if (r.Role != RowRole.Match || r.TargetIndex < 0) continue;
+            if (r.TargetIndex >= oldRows.Count ||
+                oldRows[r.TargetIndex].Role != RowRole.Trigger ||
+                !Rows.Contains(oldRows[r.TargetIndex]))
+            {
+                r.Role = RowRole.Normal;   // 目标行没了：连带取消
+                r.TargetIndex = -1;
+                continue;
+            }
+            r.TargetIndex = Rows.IndexOf(oldRows[r.TargetIndex]);   // 目标行位移：跟着更新
+        }
+    }
+
     [RelayCommand]
     private void InsertRow()
     {
         if (Rows.Count >= MaxRows) { MessageBox.Show("最多支持 200 行", "提示", MessageBoxButton.OK, MessageBoxImage.Information); return; }
         int idx = SelectedRow == null ? Rows.Count : Math.Max(0, Rows.IndexOf(SelectedRow));
+        var old = Rows.ToList();
         var row = new SendRow();
         Rows.Insert(idx, row);
         SelectedRow = row;
+        FixMatchTargets(old);
         RebuildTriggers();
     }
 
@@ -545,7 +599,14 @@ public partial class MainViewModel : ObservableObject
     private void DeleteRow()
     {
         if (SelectedRow == null) return;
+        var old = Rows.ToList();
+        int idx = old.IndexOf(SelectedRow);
         Rows.Remove(SelectedRow);
+        FixMatchTargets(old);
+        /* 删除后选中原位置的行（min 兜底）：中间行 → 顶上的下一行；
+         * 最后一行 → 新的最后一行。连续删除时选中一直跟着走。 */
+        if (Rows.Count > 0)
+            SelectedRow = Rows[Math.Min(idx, Rows.Count - 1)];
         RebuildTriggers();
     }
 
@@ -554,7 +615,9 @@ public partial class MainViewModel : ObservableObject
     {
         int i = SelectedRow == null ? -1 : Rows.IndexOf(SelectedRow);
         if (i <= 0) return;
+        var old = Rows.ToList();
         Rows.Move(i, i - 1);
+        FixMatchTargets(old);
         RebuildTriggers();
     }
 
@@ -563,7 +626,9 @@ public partial class MainViewModel : ObservableObject
     {
         int i = SelectedRow == null ? -1 : Rows.IndexOf(SelectedRow);
         if (i < 0 || i >= Rows.Count - 1) return;
+        var old = Rows.ToList();
         Rows.Move(i, i + 1);
+        FixMatchTargets(old);
         RebuildTriggers();
     }
 
@@ -614,9 +679,9 @@ public partial class MainViewModel : ObservableObject
             MessageBox.Show("部分行内容在该格式下无法解析，已保持原格式", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
-    /// <summary>右键菜单：设置行角色。</summary>
     /// <summary>设置行角色。设为匹配行时必须**显式指定目标触发行**
-    /// （先设触发行，右键"设为匹配行"子菜单列出所有触发行供选择关联）。</summary>
+    /// （先设触发行，右键"触发匹配"子菜单列出所有触发行供选择关联）。
+    /// 取消触发行时**连带取消**关联到它的所有匹配行（整组清除）。</summary>
     public void SetRowRole(SendRow? row, RowRole role, int matchTarget = -1)
     {
         if (row == null) return;
@@ -636,6 +701,20 @@ public partial class MainViewModel : ObservableObject
         {
             row.TargetIndex = -1;
         }
+        /* 取消触发行（或改成匹配行）：连带取消指向它的匹配行 */
+        if (row.Role == RowRole.Trigger && role != RowRole.Trigger)
+        {
+            int idx = Rows.IndexOf(row);
+            for (int i = 0; i < Rows.Count; i++)
+            {
+                var m = Rows[i];
+                if (m.Role == RowRole.Match && m.TargetIndex == idx)
+                {
+                    m.Role = RowRole.Normal;
+                    m.TargetIndex = -1;
+                }
+            }
+        }
         row.Role = role;
         RebuildTriggers();
     }
@@ -645,6 +724,17 @@ public partial class MainViewModel : ObservableObject
     {
         if (row == null || row.Role != RowRole.Match) return;
         row.MatchMode = mode;
+        RebuildTriggers();
+    }
+
+    /// <summary>取消全部标记：所有行角色复位（触发/匹配全部清除）。</summary>
+    public void UnmarkAll()
+    {
+        foreach (var r in Rows)
+        {
+            r.Role = RowRole.Normal;
+            r.TargetIndex = -1;
+        }
         RebuildTriggers();
     }
 
@@ -905,7 +995,7 @@ private static int Utf8SeqLen(byte b) => b switch
         _loopCts?.Cancel();
         _silenceTimer.Stop();
         _serial.Close();
-        _config.Save(Serial, Display, Rows.ToList());
+        _config.Save(Serial, Display, Trigger, Rows.ToList());
         LogService.Log($"opencom 退出：RX {_rxTotal} 字节，TX {_txTotal} 字节");
     }
 }

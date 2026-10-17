@@ -50,7 +50,7 @@
             <Setter Property="Background" Value="Transparent"/>
         </Style>
 
-        <!-- 格式/关系列文字居中 -->
+        <!-- 格式/触发列文字居中 -->
         <Style x:Key="CenteredCell" TargetType="TextBlock">
             <Setter Property="TextAlignment" Value="Center"/>
             <Setter Property="VerticalAlignment" Value="Center"/>

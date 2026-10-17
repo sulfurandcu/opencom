@@ -60,6 +60,10 @@ public sealed class SerialService
                 WriteTimeout = 500,   // 每次写前由写线程按数据长度/波特率重算
             };
             port.Open();
+            /* 清掉关闭期间积累的陈旧数据：端口关着时设备可能还在发，
+             * 数据堆在驱动缓冲里，一打开会先把过时数据吐出来 */
+            port.DiscardInBuffer();
+            port.DiscardOutBuffer();
             _open = true;
             _port = port;
             _cts = new CancellationTokenSource();
@@ -83,7 +87,14 @@ public sealed class SerialService
         {
             lock (_openLock)
             {
-                try { port?.Close(); } catch { }
+                try
+                {
+                    // 关闭前清空驱动缓冲：残留的旧数据不要留给下一次打开
+                    port?.DiscardInBuffer();
+                    port?.DiscardOutBuffer();
+                    port?.Close();
+                }
+                catch { }
                 if (ReferenceEquals(_port, port)) _port = null;
                 _txQueue = null;
             }

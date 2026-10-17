@@ -132,7 +132,7 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>双击格式格 = 该行 HEX/ASCII 互切；双击关系格（触发/匹配行）= 查看
+    /// <summary>双击格式格 = 该行 HEX/ASCII 互切；双击触发格（触发/匹配行）= 查看
     /// 该组匹配关系（触发行看自己组的匹配行，匹配行看自己关联触发行组的匹配行）。
     /// 内容格的双击被 TextBox 处理掉了。</summary>
     private void SendGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -142,7 +142,7 @@ public partial class MainWindow : Window
         int col = cell.Column?.DisplayIndex ?? -1;
         if (col == 1)   // 格式列
             _vm.ToggleRowFormat(row);
-        else if (col == 2)   // 关系列
+        else if (col == 2)   // 触发列
         {
             if (row.Role == RowRole.Trigger)
                 _vm.ShowMatchesForTrigger(_vm.Rows.IndexOf(row));
@@ -151,14 +151,14 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>双击格式表头 = 全部行一起切换；双击关系表头 = 查看所有匹配关系；
+    /// <summary>双击格式表头 = 全部行一起切换；双击触发表头 = 查看所有匹配关系；
     /// 双击次数表头 = 全部行次数设为 1。</summary>
     private void Header_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         var col = FindAncestor<DataGridColumnHeader>(e.OriginalSource as DependencyObject)?.Column?.Header?.ToString();
         if (col == "格式")
             _vm.ToggleAllFormats();
-        else if (col == "关系")
+        else if (col == "触发")
             _vm.ShowMatchesCommand.Execute(null);
         else if (col == "次数")
             _vm.ResetAllCounts();
@@ -176,22 +176,25 @@ public partial class MainWindow : Window
         _vm.SelectedRow = r;
 
         var menu = new ContextMenu();
-        menu.Items.Add(CtxItem("发送该行", () => _vm.SendSelectedCommand.Execute(null)));
-        menu.Items.Add(CtxItem("循环发送该行...", () => _vm.ToggleLoopCommand.Execute(null)));
+        menu.Items.Add(CtxItem("单次发送", () => _vm.SendSelectedCommand.Execute(null)));
+        menu.Items.Add(CtxItem("循环发送", () => _vm.ToggleLoopCommand.Execute(null)));
         menu.Items.Add(new Separator());
 
-        // 设为匹配行 子菜单：列出现有触发行（"A - 第N行"）
-        var subMatch = new MenuItem { Header = "设为匹配行" };
+        // 触发发送：把本行设为触发行（内容即触发后发送的数据）
+        var trig = CtxItem("触发发送", () => _vm.SetRowRole(r, RowRole.Trigger));
+        trig.IsEnabled = r.Role == RowRole.Normal;
+        menu.Items.Add(trig);
+
+        // 触发匹配 子菜单：列出现有触发行（第N行）供显式关联，
+        // 字体颜色与该触发行所在组一致
+        var subMatch = new MenuItem { Header = "触发匹配" };
         bool hasTrigger = false;
         for (int i = 0; i < _vm.Rows.Count; i++)
         {
             if (_vm.Rows[i].Role != RowRole.Trigger) continue;
             hasTrigger = true;
-            int rank = 0;
-            for (int k = 0; k < i; k++)
-                if (_vm.Rows[k].Role == RowRole.Trigger) rank++;
             int target = i;
-            var item = new MenuItem { Header = $"{(char)('A' + rank)} - 第{i + 1}行" };
+            var item = new MenuItem { Header = $"第{i + 1}行", Foreground = _vm.Rows[i].GroupColor };
             item.Click += (_, _) => _vm.SetRowRole(r, RowRole.Match, target);
             subMatch.Items.Add(item);
         }
@@ -204,9 +207,9 @@ public partial class MainWindow : Window
         var subMode = new MenuItem { Header = "匹配方式", IsEnabled = r.Role == RowRole.Match };
         foreach (var (name, mode) in new[]
                  {
-                     ("包含匹配", MatchMode.Contains),
                      ("完全相等", MatchMode.Equals),
                      ("前缀匹配", MatchMode.Prefix),
+                     ("包含匹配", MatchMode.Contains),
                  })
         {
             var m = mode;
@@ -216,17 +219,12 @@ public partial class MainWindow : Window
         }
         menu.Items.Add(subMode);
 
-        var trig = CtxItem("设为触发发送行", () => _vm.SetRowRole(r, RowRole.Trigger));
-        trig.IsEnabled = r.Role == RowRole.Normal;
-        menu.Items.Add(trig);
         var unmark = CtxItem("取消标记", () => _vm.SetRowRole(r, RowRole.Normal));
         unmark.IsEnabled = r.Role != RowRole.Normal;
         menu.Items.Add(unmark);
-        var viewMatch = CtxItem("查看触发本行的匹配行", () => _vm.ShowMatchesForTrigger(_vm.Rows.IndexOf(r)));
-        viewMatch.IsEnabled = r.Role == RowRole.Trigger;
-        menu.Items.Add(viewMatch);
-        menu.Items.Add(new Separator());
-        menu.Items.Add(CtxItem("删除行", () => _vm.DeleteRowCommand.Execute(null)));
+        var unmarkAll = CtxItem("取消全部", () => _vm.UnmarkAll());
+        unmarkAll.IsEnabled = _vm.Rows.Any(x => x.Role != RowRole.Normal);
+        menu.Items.Add(unmarkAll);
 
         menu.PlacementTarget = dg;
         menu.IsOpen = true;
@@ -257,6 +255,16 @@ public partial class MainWindow : Window
             row.SendCount = n;
         else
             ((TextBox)sender).Text = row.SendCount.ToString();   // 回滚显示
+    }
+
+    /// <summary>延时输入框失焦 = 校验：非负整数，非法回滚显示。</summary>
+    private void DelayBox_LostFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is not TextBox box) return;
+        if (int.TryParse(box.Text, out var n) && n >= 0)
+            _vm.Trigger.DelayMs = n;
+        else
+            box.Text = _vm.Trigger.DelayMs.ToString();   // 回滚显示
     }
 
     /// <summary>Shell 回车符单选（CRLF/CR/LF）。</summary>

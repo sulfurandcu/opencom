@@ -25,3 +25,10 @@ public partial class DisplayOptions : ObservableObject
     /// <summary>Shell 回车符：0=CRLF 1=CR 2=LF。</summary>
     [ObservableProperty] private int _shellEol = 1;
 }
+
+/// <summary>触发匹配选项：总开关 + 命中后延时发送（全局，毫秒，0=立即）。</summary>
+public partial class TriggerOptions : ObservableObject
+{
+    [ObservableProperty] private bool _enabled = true;
+    [ObservableProperty] private int _delayMs;
+}

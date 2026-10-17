@@ -45,11 +45,11 @@ public partial class SendRow : ObservableObject
     /// <summary>最近一次校验通过的内容（HEX 提交失败回滚用）。</summary>
     internal string LastValidContent { get; set; } = "";
 
-    /// <summary>关系列显示文本。</summary>
+    /// <summary>触发列显示文本。</summary>
     public string RoleLabel => Role switch
     {
         RowRole.Match => "匹配",
-        RowRole.Trigger => "触发",
+        RowRole.Trigger => "・发送・",
         _ => ""
     };
 

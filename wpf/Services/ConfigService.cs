@@ -16,6 +16,7 @@ public sealed class ConfigService
     {
         public SerialSettings? Serial { get; set; }
         public DisplayOptions? Display { get; set; }
+        public TriggerOptions? Trigger { get; set; }
         public List<RowDto>? Rows { get; set; }
     }
 
@@ -29,12 +30,13 @@ public sealed class ConfigService
         public int? SendCount { get; set; }   // 旧配置无此字段 → 默认 1
     }
 
-    public void Save(SerialSettings serial, DisplayOptions display, IList<SendRow> rows)
+    public void Save(SerialSettings serial, DisplayOptions display, TriggerOptions trigger, IList<SendRow> rows)
     {
         var dto = new ConfigDto
         {
             Serial = serial,
             Display = display,
+            Trigger = trigger,
             Rows = rows.Select(r => new RowDto
             {
                 Content = r.Content,
@@ -49,18 +51,20 @@ public sealed class ConfigService
         File.WriteAllText(_path, JsonSerializer.Serialize(dto, new JsonSerializerOptions { WriteIndented = true }));
     }
 
-    public (SerialSettings serial, DisplayOptions display, List<SendRow> rows) Load()
+    public (SerialSettings serial, DisplayOptions display, TriggerOptions trigger, List<SendRow> rows) Load()
     {
         var serial = new SerialSettings();
         var display = new DisplayOptions();
+        var trigger = new TriggerOptions();
         var rows = new List<SendRow>();
-        if (!File.Exists(_path)) return (serial, display, rows);
+        if (!File.Exists(_path)) return (serial, display, trigger, rows);
 
         try
         {
             var dto = JsonSerializer.Deserialize<ConfigDto>(File.ReadAllText(_path));
             if (dto?.Serial != null) serial = dto.Serial;
             if (dto?.Display != null) display = dto.Display;
+            if (dto?.Trigger != null) trigger = dto.Trigger;
             if (dto?.Rows != null)
             {
                 foreach (var rd in dto.Rows)
@@ -79,6 +83,6 @@ public sealed class ConfigService
         }
         catch { /* 配置损坏时用默认值启动 */ }
 
-        return (serial, display, rows);
+        return (serial, display, trigger, rows);
     }
 }
