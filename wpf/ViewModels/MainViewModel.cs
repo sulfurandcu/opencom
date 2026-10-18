@@ -551,6 +551,22 @@ public partial class MainViewModel : ObservableObject
         foreach (var r in Rows) r.SendCount = 1;
     }
 
+    /// <summary>查看本行数据的串口波形（按当前串口参数画 UART 时序）。</summary>
+    public void ShowWaveform(SendRow row)
+    {
+        TriggerEngine.TryCompileContent(row);
+        if (row.TxBytes.Length == 0)
+        {
+            MessageBox.Show("该行内容为空或解析失败", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        var dlg = new WaveformDialog(row.TxBytes, Serial)
+        {
+            Owner = Application.Current.MainWindow,
+        };
+        dlg.ShowDialog();
+    }
+
     // ---------------- 行操作 ----------------
 
     [RelayCommand]

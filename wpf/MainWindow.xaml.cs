@@ -179,6 +179,7 @@ public partial class MainWindow : Window
         var menu = new ContextMenu();
         menu.Items.Add(CtxItem("单次发送", () => _vm.SendSelectedCommand.Execute(null)));
         menu.Items.Add(CtxItem("循环发送", () => _vm.ToggleLoopCommand.Execute(null)));
+        menu.Items.Add(CtxItem("查看波形", () => _vm.ShowWaveform(r)));
         menu.Items.Add(new Separator());
 
         // 触发发送：把本行设为触发行（内容即触发后发送的数据）
