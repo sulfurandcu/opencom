@@ -22,6 +22,7 @@
                 <MenuItem Header="显示时间戳" IsCheckable="True" IsChecked="{Binding Display.Timestamp}"/>
                 <MenuItem Header="显示方向" IsCheckable="True" IsChecked="{Binding Display.Direction}"/>
                 <MenuItem Header="显示发送数据" IsCheckable="True" IsChecked="{Binding Display.ShowTx}"/>
+                <MenuItem Header="显示发送窗口" IsCheckable="True" IsChecked="{Binding Display.ShowSendPanel}"/>
                 <Separator/>
                 <!-- 固定文字 ASCII模式（与底部按钮一致），勾选态 = ASCII 模式 -->
                 <MenuItem Header="ASCII 模式" IsCheckable="True" IsChecked="{Binding Display.Hex, Converter={StaticResource InverseBool}}"/>
@@ -156,12 +157,18 @@
         <!-- 主区域：左发送 / 右接收 -->
         <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="440" MinWidth="380"/>
+                <ColumnDefinition x:Name="SendCol" Width="440" MinWidth="380"/>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*" MinWidth="320"/>
             </Grid.ColumnDefinitions>
 
+            <!-- 左右面板之间的拖动条：调整两侧宽度（发送窗口隐藏时一起隐藏，代码控制可见性） -->
+            <GridSplitter x:Name="Splitter" Grid.Column="1" Width="5" HorizontalAlignment="Center"
+                          VerticalAlignment="Stretch" Background="#E0E0E5"
+                          ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"/>
+
             <!-- 左面板 -->
-            <DockPanel Grid.Column="0" Margin="12,4,6,8">
+            <DockPanel x:Name="SendPanel" Grid.Column="0" Margin="12,4,6,8">
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
                     <TextBlock Text="发送窗口" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <Button Content="添加" Command="{Binding AddRowCommand}" Width="46"/>
@@ -252,7 +259,7 @@
             </DockPanel>
 
             <!-- 右面板 -->
-            <DockPanel Grid.Column="1" Margin="6,4,12,8">
+            <DockPanel Grid.Column="2" Margin="6,4,12,8">
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
                     <TextBlock Text="接收窗口" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <Button Content="清空" Command="{Binding ClearReceiveCommand}" Width="60"/>

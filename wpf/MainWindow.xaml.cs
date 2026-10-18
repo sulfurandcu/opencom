@@ -22,8 +22,10 @@ public partial class MainWindow : Window
         DataContext = _vm;
         _vm.PropertyChanged += OnVmPropertyChanged;
         _vm.ConfigLoaded += SyncSerialCombos;   // 加载命名配置后同步串口下拉框
+        _vm.Display.PropertyChanged += OnDisplayChanged;
         SyncSerialCombos();
         UpdateRecvReadOnly();
+        ApplySendPanelVisibility();   // 启动时按配置应用发送窗口可见性
         // 接收窗口禁用输入法：Shell 模式敲一个字符必须发一个字符，
         // 拼音组合缓冲会吞掉按键
         InputMethod.SetIsInputMethodEnabled(RecvBox, false);
@@ -33,6 +35,33 @@ public partial class MainWindow : Window
     {
         if (e.PropertyName == nameof(MainViewModel.ShellMode))
             UpdateRecvReadOnly();
+    }
+
+    private double _sendColWidth = 440;
+
+    /// <summary>显示/隐藏发送窗口：隐藏时列宽归零（记住原宽度，恢复时还原）。</summary>
+    private void OnDisplayChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(DisplayOptions.ShowSendPanel))
+            ApplySendPanelVisibility();
+    }
+
+    private void ApplySendPanelVisibility()
+    {
+        bool show = _vm.Display.ShowSendPanel;
+        SendPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        Splitter.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        if (show)
+        {
+            SendCol.MinWidth = 380;
+            SendCol.Width = new GridLength(_sendColWidth);
+        }
+        else
+        {
+            _sendColWidth = SendCol.Width.IsAbsolute ? SendCol.Width.Value : 440;
+            SendCol.MinWidth = 0;             // 必须同时放开最小宽，否则 Width=0 被夹到 380
+            SendCol.Width = new GridLength(0);
+        }
     }
 
     private void UpdateRecvReadOnly()

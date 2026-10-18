@@ -5,6 +5,7 @@
     <Application.Resources>
         <conv:InverseBoolConverter x:Key="InverseBool"
             xmlns:conv="clr-namespace:OpenCom.Wpf.Converters"/>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <!-- 浅色主题（客户区 #F5F5F7、正文 #303032） -->
         <SolidColorBrush x:Key="Brush.Client" Color="#F5F5F7"/>
         <SolidColorBrush x:Key="Brush.Text" Color="#303032"/>

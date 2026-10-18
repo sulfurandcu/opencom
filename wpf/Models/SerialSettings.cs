@@ -24,6 +24,8 @@ public partial class DisplayOptions : ObservableObject
     [ObservableProperty] private bool _showTx;
     /// <summary>Shell 回车符：0=CRLF 1=CR 2=LF。</summary>
     [ObservableProperty] private int _shellEol = 1;
+    /// <summary>显示发送窗口（视图菜单开关）。</summary>
+    [ObservableProperty] private bool _showSendPanel = true;
 }
 
 /// <summary>触发匹配选项：总开关 + 命中后延时发送（全局，毫秒，0=立即）。</summary>
