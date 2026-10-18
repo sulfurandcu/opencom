@@ -41,9 +41,12 @@ public partial class MainWindow : Window
         if (_vm.ShellMode) RecvBox.Focus();
     }
 
-    /// <summary>把数据位/校验/停止位/流控下拉同步到已加载的串口配置。</summary>
+    /// <summary>把数据位/校验/停止位/流控下拉、Shell 回车符勾选同步到已加载的串口配置。</summary>
     private void SyncSerialCombos()
     {
+        miEolCrlf.IsChecked = _vm.Display.ShellEol == 0;
+        miEolCr.IsChecked = _vm.Display.ShellEol == 1;
+        miEolLf.IsChecked = _vm.Display.ShellEol == 2;
         SelectTag(cbData, _vm.Serial.DataBits.ToString());
         SelectTag(cbParity, _vm.Serial.Parity.ToString());
         SelectTag(cbStop, _vm.Serial.StopBits switch
@@ -292,7 +295,16 @@ public partial class MainWindow : Window
 
     private void RecvBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (!_vm.ShellMode) return;
+        if (!_vm.ShellMode)
+        {
+            // 接收窗口敲回车 = 进入 Shell 模式
+            if (e.Key == Key.Enter)
+            {
+                _vm.ShellMode = true;
+                e.Handled = true;
+            }
+            return;
+        }
         if (e.Key == Key.Enter)
         {
             _vm.ShellKeyRaw(_vm.ShellEnterBytes());

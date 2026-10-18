@@ -174,8 +174,8 @@
                     <Button Content="发送选中" Command="{Binding SendSelectedCommand}" Width="66"/>
                     <Button Content="{Binding LoopButtonText}" Command="{Binding ToggleLoopCommand}" Width="66" Margin="4,0,0,0"/>
                     <Button Content="{Binding LoopAllButtonText}" Command="{Binding ToggleLoopAllCommand}" Width="66" Margin="4,0,0,0"/>
-                    <ToggleButton Content="触发" IsChecked="{Binding Trigger.Enabled}" Width="48" Margin="4,0,0,0" ToolTip="触发匹配总开关：选中=开启"/>
-                    <TextBlock Text="延时" VerticalAlignment="Center" Margin="6,0,2,0"/>
+                    <ToggleButton Content="触发模式" IsChecked="{Binding Trigger.Enabled}" Width="64" Margin="4,0,0,0" ToolTip="触发匹配总开关：选中=开启"/>
+                    <TextBlock Text="触发延时" VerticalAlignment="Center" Margin="6,0,2,0"/>
                     <TextBox Text="{Binding Trigger.DelayMs, UpdateSourceTrigger=PropertyChanged}" Width="44"
                              VerticalContentAlignment="Center" Padding="2,0" ToolTip="触发命中后延时发送（毫秒，0=立即）"
                              LostKeyboardFocus="DelayBox_LostFocus"/>

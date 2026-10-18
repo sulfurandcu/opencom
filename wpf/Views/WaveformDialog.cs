@@ -31,7 +31,7 @@ public class WaveformDialog : Window
         double bitWidth = 1.0 / frame.Baud;                       // X：位宽
         double byteWidth = frame.TotalBits / frame.Baud;          // Y：字节宽
         double total = byteWidth * bytes.Length;                  // Z：总时长
-        string parityLetter = "NOPMS"[(int)s.Parity].ToString();
+        string parityLetter = "NOEMS"[(int)s.Parity].ToString();
         string stopText = s.StopBits switch
         {
             System.IO.Ports.StopBits.OnePointFive => "1.5",
@@ -296,8 +296,7 @@ public class WaveformView : FrameworkElement
             }
         }
 
-        var typeface = new Typeface("Consolas");
-        var labelTypeface = new Typeface("Microsoft YaHei UI");
+        var typeface = new Typeface("Consolas");   // 上下标注统一字体字号
         double dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
 
         // 顶部标注（无竖线）：数据位逐个标 0/1（蓝色），校验位标 O/E/M/S（紫色）
@@ -317,7 +316,7 @@ public class WaveformView : FrameworkElement
                     if (cx < 0 || cx > ActualWidth) continue;
                     var ft = new FormattedText(((b >> k) & 1) == 1 ? "1" : "0",
                                                CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                                               labelTypeface, 10, blue, dpi);
+                                               typeface, 12, blue, dpi);
                     // 与下方标注对称：文字底边距波形 6px
                     dc.DrawText(ft, new Point(cx - ft.Width / 2, top - 6 - ft.Height));
                 }
@@ -334,7 +333,7 @@ public class WaveformView : FrameworkElement
                     if (cx >= 0 && cx <= ActualWidth)
                     {
                         var ft = new FormattedText(pl, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                                                   labelTypeface, 10, purple, dpi);
+                                                   typeface, 12, purple, dpi);
                         dc.DrawText(ft, new Point(cx - ft.Width / 2, top - 6 - ft.Height));
                     }
                 }
@@ -354,7 +353,7 @@ public class WaveformView : FrameworkElement
             if (x < -40 || x > ActualWidth + 40) continue;
             var ft = new FormattedText(FmtAxis(t - _idleTime),
                                        CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                                       typeface, 10, TextBrush, dpi);
+                                       typeface, 12, TextBrush, dpi);
             dc.DrawText(ft, new Point(x - ft.Width / 2, bottom + 6));
         }
         double bytePx = tPerByte * _zoom;
@@ -366,7 +365,7 @@ public class WaveformView : FrameworkElement
                 if (x < -30 || x > ActualWidth + 30) continue;
                 var ft = new FormattedText($"0x{_bytes[i]:X2}",
                                            CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                                           typeface, 10, TextBrush, dpi);
+                                           typeface, 12, TextBrush, dpi);
                 dc.DrawText(ft, new Point(x - ft.Width / 2, bottom + 6));
             }
         }

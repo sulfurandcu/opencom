@@ -140,31 +140,40 @@ public partial class MainViewModel : ObservableObject
         }
         else
         {
-            try
-            {
-                if (string.IsNullOrEmpty(Serial.Port))
-                {
-                    MessageBox.Show("请选择端口", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-                    return;
-                }
-                _serial.Open(Serial);
-                // 新会话：清空跨会话的接收状态（行缓冲/待显队列/CR·UTF-8 归一化状态），
-                // 防止上一次会话的半行与本次数据拼接
-                lock (_lineLock) _lineBuf.Clear();
-                _pendingRx.Clear();
-                _prevCr = false;
-                _utf8Tail.Clear();
-                PortOpen = true;
-                PortButtonText = "关闭串口";
-                UpdateStatusText();
-                LogService.Log($"打开串口 {Serial.Port} {Serial.Baud} {Serial.DataBits}" +
-                               $"{(int)Serial.Parity}{(int)Serial.StopBits}{(int)Serial.FlowControl} DTR={(Serial.Dtr ? 1 : 0)} RTS={(Serial.Rts ? 1 : 0)}");
-            }
-            catch (Exception ex)
-            {
-                LogService.Log($"打开串口失败 {Serial.Port}: {ex.Message}");
-                MessageBox.Show($"打开串口失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+            TryOpenPort("打开串口");
+        }
+    }
+
+    /// <summary>打开串口（手动与发送前自动打开共用）。成功返回 true。
+    /// 新会话清空跨会话的接收状态（行缓冲/待显队列/CR·UTF-8 归一化状态），
+    /// 防止上一次会话的半行与本次数据拼接。</summary>
+    private bool TryOpenPort(string verb)
+    {
+        if (_serial.IsOpen) return true;
+        if (string.IsNullOrEmpty(Serial.Port))
+        {
+            MessageBox.Show("请选择端口", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return false;
+        }
+        try
+        {
+            _serial.Open(Serial);
+            lock (_lineLock) _lineBuf.Clear();
+            _pendingRx.Clear();
+            _prevCr = false;
+            _utf8Tail.Clear();
+            PortOpen = true;
+            PortButtonText = "关闭串口";
+            UpdateStatusText();
+            LogService.Log($"{verb} {Serial.Port} {Serial.Baud} {Serial.DataBits}" +
+                           $"{(int)Serial.Parity}{(int)Serial.StopBits}{(int)Serial.FlowControl} DTR={(Serial.Dtr ? 1 : 0)} RTS={(Serial.Rts ? 1 : 0)}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogService.Log($"{verb}失败 {Serial.Port}: {ex.Message}");
+            MessageBox.Show($"打开串口失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            return false;
         }
     }
 
@@ -336,11 +345,8 @@ public partial class MainViewModel : ObservableObject
 
     public void SendRow(SendRow row)
     {
-        if (!_serial.IsOpen)
-        {
-            MessageBox.Show("请先打开串口", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
+        // 未打开串口则尝试自动打开（用户要求：发送时自动开）
+        if (!TryOpenPort("自动打开串口")) return;
         TriggerEngine.TryCompileContent(row);
         if (row.TxBytes.Length == 0)
         {
@@ -385,12 +391,8 @@ public partial class MainViewModel : ObservableObject
             MessageBox.Show("请先选中一行", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        // 先检查串口是否打开（与单次发送一致）
-        if (!_serial.IsOpen)
-        {
-            MessageBox.Show("请先打开串口", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
+        // 未打开串口则尝试自动打开（与单次发送一致）
+        if (!TryOpenPort("自动打开串口")) return;
         // 循环参数对话框（行号/次数/间隔）
         LoopRowNumber = Rows.IndexOf(SelectedRow) + 1;
         var dlg = new LoopDialog
@@ -465,12 +467,8 @@ public partial class MainViewModel : ObservableObject
             MessageBox.Show("发送列表为空", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        // 先检查串口是否打开（与单次发送一致）
-        if (!_serial.IsOpen)
-        {
-            MessageBox.Show("请先打开串口", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
+        // 未打开串口则尝试自动打开（与单次发送一致）
+        if (!TryOpenPort("自动打开串口")) return;
         var dlg = new LoopAllDialog
         {
             Owner = Application.Current.MainWindow,
@@ -962,8 +960,31 @@ private static int Utf8SeqLen(byte b) => b switch
     partial void OnShellModeChanged(bool value)
     {
         // 退出 Shell 时也要恢复状态栏（否则残留 Shell 提示）
-        if (value) StatusText = "Shell 模式：键入即发送，Esc 退出";
-        else UpdateStatusText();
+        if (value)
+        {
+            StatusText = "Shell 模式：键入即发送，Esc 退出";
+            AppendNotice("已开启 Shell 模式");
+        }
+        else
+        {
+            UpdateStatusText();
+            AppendNotice("已关闭 Shell 模式");
+        }
+    }
+
+    /// <summary>系统提示行（如 Shell 开关）：带时标、无方向标记，与接收日志同步落盘。</summary>
+    private void AppendNotice(string text)
+    {
+        var line = new StringBuilder();
+        if (_recv.Length > 0 && _recv[^1] != '\n') line.Append('\n');   // 先收尾未断的行
+        if (Display.Timestamp) line.Append($"[{DateTime.Now:HH:mm:ss.fff}] ");
+        line.Append(text).Append('\n');
+        LogService.Recv(line.ToString());
+        _recv.Append(line);
+        if (_recv.Length > RecvTextCap) _recv.Remove(0, _recv.Length - RecvTextCap);
+        _lastAppendTick = DateTime.Now;
+        ReceiveText = _recv.ToString();
+        OnPropertyChanged(nameof(ReceiveText));
     }
 
     [RelayCommand]
@@ -974,10 +995,12 @@ private static int Utf8SeqLen(byte b) => b switch
 
     /// <summary>Shell 模式：敲一个字符立即发送一个字符。
     /// 键入的内容**不显示**（只有设备回显），
-    /// 即使勾选「显示发送数据」也不显示。</summary>
+    /// 即使勾选「显示发送数据」也不显示。
+    /// 串口未打开时尝试自动打开；打不开则退出 Shell（避免每次按键都弹窗）。</summary>
     public void ShellKey(string text)
     {
         if (!ShellMode) return;
+        if (!EnsureShellPortOpen()) return;
         var bytes = Encoding.UTF8.GetBytes(text);
         if (!_serial.Write(bytes)) return;
         _txTotal += bytes.Length;
@@ -995,9 +1018,19 @@ private static int Utf8SeqLen(byte b) => b switch
     public void ShellKeyRaw(byte[] data)
     {
         if (data.Length == 0) return;
+        if (!EnsureShellPortOpen()) return;
         if (!_serial.Write(data)) return;
         _txTotal += data.Length;
         UpdateCounters();
+    }
+
+    /// <summary>Shell 发送前的端口保障：未开则自动打开；打不开退出 Shell 模式。</summary>
+    private bool EnsureShellPortOpen()
+    {
+        if (_serial.IsOpen) return true;
+        if (TryOpenPort("自动打开串口")) return true;
+        ShellMode = false;   // 端口打不开就不留在 Shell 里，避免每次按键都弹窗
+        return false;
     }
 
     public void SetShellEol(int eol)
