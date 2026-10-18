@@ -1,0 +1,2 @@
+# 统一行尾：仓库内统一 LF，Windows 检出自动转 CRLF
+* text=auto
