@@ -26,3 +26,6 @@ debug.log.bak
 # 系统
 Thumbs.db
 .DS_Store
+
+# 个人待办不入库
+todo.md
